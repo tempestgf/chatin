@@ -6,9 +6,13 @@ import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Server {
     private static final int PORT = 4444;
+    private static final Logger logger = Logger.getLogger(Server.class.getName());
+    private static final boolean milenium = true;
 
     public static void main(String[] args) {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
@@ -20,52 +24,67 @@ public class Server {
             try (DataInputStream in = new DataInputStream(clientSocket.getInputStream());
                  DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream())) {
 
-                Thread inputThread = new Thread(() -> {
-                    try {
-                        while (true) {
-                            String message = in.readUTF();
-                            if (message.trim().isEmpty()) continue; // Ignora missatges buits
-                            if (message.equals("FI")) {
-                                System.out.println("Client ha tancat la connexió.");
-                                break;
-                            }
-                            System.out.println("Client: " + message);
-                        }
-                    } catch (SocketException e) {
-                        System.out.println("La connexió amb el client s'ha tancat.");
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
-                inputThread.start();
+                out.writeUTF("Connexió acceptada.");
+                out.flush();
 
-                Thread outputThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
-                        while (true) {
-                            String message = reader.readLine();
-                            if (message.trim().isEmpty()) continue; // Ignora missatges buits
-                            out.writeUTF(message);
-                            out.flush();
-                            if (message.equals("FI")) {
-                                System.out.println("Has tancat la connexió.");
-                                break;
-                            }
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
+                Thread inputThread = createInputThread(in);
+                Thread outputThread = createOutputThread(out);
+
+                inputThread.start();
                 outputThread.start();
 
                 inputThread.join();
                 outputThread.join();
 
             } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
+                logger.log(Level.SEVERE, "Error in I/O or thread interruption", e);
             }
 
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "Error in ServerSocket", e);
         }
+    }
+
+    private static Thread createInputThread(DataInputStream in) {
+        return new Thread(() -> {
+            try {
+                while (true) {
+                    String message = in.readUTF();
+                    if (isEmptyMessage(message)) continue;
+                    if (message.equals("FI")) {
+                        System.out.println("Client ha tancat la connexió.");
+                        break;
+                    }
+                    System.out.println("Client: " + message);
+                }
+            } catch (SocketException e) {
+                System.out.println("La connexió amb el client s'ha tancat.");
+            } catch (IOException e) {
+                logger.log(Level.SEVERE, "Error reading from client", e);
+            }
+        });
+    }
+
+    private static Thread createOutputThread(DataOutputStream out) {
+        return new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+                while (true) {
+                    String message = reader.readLine();
+                    if (isEmptyMessage(message)) continue;
+                    out.writeUTF(message);
+                    out.flush();
+                    if (message.equals("FI")) {
+                        System.out.println("Has tancat la connexió.");
+                        break;
+                    }
+                }
+            } catch (IOException e) {
+                logger.log(Level.SEVERE, "Error writing to client", e);
+            }
+        });
+    }
+
+    private static boolean isEmptyMessage(String message) {
+        return message.trim().isEmpty();
     }
 }
