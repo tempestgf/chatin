@@ -85,6 +85,7 @@ public class Server {
     }
 
     private static boolean isEmptyMessage(String message) {
+        if (message == null) return true;
         return message.trim().isEmpty();
     }
 }
